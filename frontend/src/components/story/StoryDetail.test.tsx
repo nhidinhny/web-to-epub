@@ -506,3 +506,71 @@ describe("StoryDetail cover", () => {
     expect(screen.queryByRole("img")).toBeNull();
   });
 });
+
+describe("StoryDetail bulk chapter delete", () => {
+  it("deletes the picked chapters through the single-chapter route, after a confirm", async () => {
+    api.deleteChapter.mockResolvedValue(undefined);
+    const { props } = setup();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select chapter 1" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select chapter 2" }));
+    expect(screen.getByText("Selected 2 chapters")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    expect(api.deleteChapter).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Delete 2 chapters" }));
+    expect(api.deleteChapter).toHaveBeenCalledWith("s1", 1);
+    expect(api.deleteChapter).toHaveBeenCalledWith("s1", 2);
+    await waitFor(() => expect(props.onStoryChanged).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/Selected \d+ chapters/)).not.toBeInTheDocument();
+  });
+
+  it("picks the whole page from the header and every chapter from the bar", async () => {
+    setup({ story: { chapters: Array.from({ length: 150 }, (_, i) => ch(i + 1, { status: "pending", blocks: undefined })) } });
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select all chapters on this page" }));
+    expect(screen.getByText("Selected 100 chapters")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Select all 150 chapters" }));
+    expect(screen.getByText("Selected 150 chapters")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Deselect" }));
+    expect(screen.queryByText(/Selected \d+ chapters/)).not.toBeInTheDocument();
+  });
+
+  it("keeps a refused chapter picked and shows why", async () => {
+    api.deleteChapter.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("locked db"));
+    setup();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select chapter 1" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select chapter 2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete selected" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete 2 chapters" }));
+    expect(await screen.findByText("locked db")).toBeInTheDocument();
+    expect(screen.getByText("Selected 1 chapters")).toBeInTheDocument();
+  });
+
+  it("crawls only the picked chapters, in TOC order, and clears the pick", async () => {
+    api.startStoryCrawl.mockResolvedValue({ total: 2 });
+    setup();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select chapter 3" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select chapter 2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Crawl 2 chapters" }));
+    expect(api.startStoryCrawl).toHaveBeenCalledWith("s1", [2, 3]);
+    expect(screen.queryByText(/Selected \d+ chapters/)).not.toBeInTheDocument();
+  });
+
+  it("asks before crawling picked chapters that are already crawled", async () => {
+    api.startStoryCrawl.mockResolvedValue({ total: 2 });
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    setup();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select chapter 1" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select chapter 2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Crawl 2 chapters" }));
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("1 of the selected chapters are already crawled"));
+    expect(api.startStoryCrawl).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Crawl 2 chapters" }));
+    expect(api.startStoryCrawl).toHaveBeenCalledWith("s1", [1, 2]);
+    confirm.mockRestore();
+  });
+
+  it("cannot pick chapters while a crawl runs", () => {
+    setup({ job: { running: true } });
+    expect(screen.getByRole("checkbox", { name: "Select chapter 1" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Select all chapters on this page" })).toBeDisabled();
+  });
+});

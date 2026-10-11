@@ -14,6 +14,8 @@ export default function PendingChapterRow({
   onSaveTitle,
   onDelete,
   deleteDisabled,
+  picked,
+  onTogglePicked,
 }: {
   order: number;
   title: string;
@@ -26,6 +28,9 @@ export default function PendingChapterRow({
   // Missing when the chapter cannot be deleted from this context (e.g. no library yet).
   onDelete?: () => Promise<void>;
   deleteDisabled?: boolean;
+  // Missing when chapters cannot be picked for a bulk action here.
+  picked?: boolean;
+  onTogglePicked?: () => void;
 }) {
   const { t } = useLang();
   const [editing, setEditing] = useState(false);
@@ -71,6 +76,18 @@ export default function PendingChapterRow({
 
   return (
     <tr>
+      {onTogglePicked && (
+        <td>
+          <input
+            type="checkbox"
+            className="checkbox"
+            aria-label={t("Select chapter {order}", { order })}
+            checked={!!picked}
+            disabled={deleteDisabled}
+            onChange={onTogglePicked}
+          />
+        </td>
+      )}
       <td className="num w-11">
         <b>{order}</b>
       </td>

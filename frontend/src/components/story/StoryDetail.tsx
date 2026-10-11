@@ -73,6 +73,10 @@ export default function StoryDetail({
   // shows immediately instead of waiting for the next refetch to catch up.
   const [pendingTitles, setPendingTitles] = useState<Record<number, string>>({});
   const [loadingNew, setLoadingNew] = useState(false);
+  // Chapters picked for a bulk delete or crawl, by order; kept across chapter pages.
+  const [picked, setPicked] = useState<Set<number>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [reading, setReading] = useState(false);
   const { isExporting, progress, exportStoryBook } = useEpubExport();
   const {
@@ -155,6 +159,11 @@ export default function StoryDetail({
     (currentChapterPage - 1) * CHAPTERS_PER_PAGE,
     currentChapterPage * CHAPTERS_PER_PAGE
   );
+  // Same rules as the library's bulk delete: nothing is pickable while the crawl that would
+  // write these chapters runs, and a pick of a chapter that is gone no longer counts.
+  const pickedOrders = job.running ? [] : story.chapters.filter((c) => picked.has(c.order)).map((c) => c.order);
+  const allPagePicked = visibleChapters.length > 0 && visibleChapters.every((c) => picked.has(c.order));
+  const somePagePicked = visibleChapters.some((c) => picked.has(c.order));
 
   // Open story listens on realtime channel: crawl started by this or another
   // session both update the chapter table directly.
@@ -225,10 +234,9 @@ export default function StoryDetail({
     if (single !== undefined) {
       setChapters((cs) => cs.map((c) => (c.order === single ? { ...c, retrying: true, retriedOnce: true } : c)));
     }
-    rewrittenIds.current =
-      single !== undefined
-        ? [`stored-${single}`]
-        : story.chapters.filter((c) => c.status !== "done").map((c) => `stored-${c.order}`);
+    rewrittenIds.current = orders
+      ? orders.map((order) => `stored-${order}`)
+      : story.chapters.filter((c) => c.status !== "done").map((c) => `stored-${c.order}`);
 
     try {
       await startStoryCrawl(story.id, orders);
@@ -287,17 +295,70 @@ export default function StoryDetail({
     setError(null);
     try {
       await deleteChapter(story.id, order);
-      bodies.current.delete(`stored-${order}`);
-      setChapters((cs) => cs.filter((c) => c.order !== order));
-      setPendingTitles((titles) => {
-        if (!(order in titles)) return titles;
-        const { [order]: _removed, ...rest } = titles;
-        return rest;
-      });
+      forgetChapters([order]);
       await onStoryChanged();
     } catch (err) {
       setError((err as Error).message);
     }
+  }
+
+  function forgetChapters(orders: number[]) {
+    const gone = new Set(orders);
+    for (const order of orders) bodies.current.delete(`stored-${order}`);
+    setChapters((cs) => cs.filter((c) => !gone.has(c.order)));
+    setPendingTitles((titles) => Object.fromEntries(Object.entries(titles).filter(([order]) => !gone.has(Number(order)))));
+  }
+
+  // Delete the picked chapters one by one through the same route as a single delete, like
+  // the library's bulk delete: one refusal does not stop the rest, the refused ones stay
+  // picked and the first reason is shown.
+  async function handleBulkDelete(orders: number[]) {
+    setError(null);
+    setBulkBusy(true);
+    const failed = new Map<number, string>();
+    for (const order of orders) {
+      try {
+        await deleteChapter(story.id, order);
+      } catch (err) {
+        failed.set(order, (err as Error).message);
+      }
+    }
+    forgetChapters(orders.filter((order) => !failed.has(order)));
+    setPicked(new Set(failed.keys()));
+    setConfirmBulk(false);
+    if (failed.size > 0) setError(failed.values().next().value as string);
+    await onStoryChanged();
+    setBulkBusy(false);
+  }
+
+  // Crawl only the picked chapters, in TOC order, through the same run as "Continue crawl".
+  // Picked chapters that are already crawled are crawled again, which overwrites them — ask first,
+  // like the per-chapter retry does.
+  async function handleCrawlPicked(orders: number[]) {
+    const crawled = story.chapters.filter((c) => c.status === "done" && orders.includes(c.order)).length;
+    if (
+      crawled > 0 &&
+      !window.confirm(
+        t("{count} of the selected chapters are already crawled; crawling them again overwrites their saved content. Continue?", {
+          count: crawled,
+        })
+      )
+    ) {
+      return;
+    }
+    setPicked(new Set());
+    setConfirmBulk(false);
+    await handleCrawl([...orders].sort((a, b) => a - b));
+  }
+
+  function togglePicked(order: number) {
+    setPicked((current) => {
+      const next = new Set(current);
+      if (next.has(order)) next.delete(order);
+      else next.add(order);
+      return next;
+    });
+    setConfirmBulk(false);
   }
 
   async function handleToggleSpellChecked(order: number, spellChecked: boolean) {
@@ -587,9 +648,80 @@ export default function StoryDetail({
       </div>
 
       <div className="pane-body flex-none overflow-visible">
+        {pickedOrders.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-rule px-3 py-2 text-xs text-ink-2">
+            <span>{t("Selected {count} chapters", { count: pickedOrders.length })}</span>
+            {pickedOrders.length < story.chapters.length && (
+              <button
+                type="button"
+                className="btn btn-tiny btn-quiet"
+                onClick={() => {
+                  setPicked(new Set(story.chapters.map((c) => c.order)));
+                  setConfirmBulk(false);
+                }}
+              >
+                {t("Select all {count} chapters", { count: story.chapters.length })}
+              </button>
+            )}
+            <span className="ml-auto flex gap-1.5">
+              {confirmBulk ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn btn-tiny btn-danger"
+                    disabled={bulkBusy}
+                    onClick={() => handleBulkDelete(pickedOrders)}
+                  >
+                    {bulkBusy ? t("Deleting…") : t("Delete {count} chapters", { count: pickedOrders.length })}
+                  </button>
+                  <button type="button" className="btn btn-tiny btn-quiet" onClick={() => setConfirmBulk(false)}>
+                    {t("Cancel")}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="btn btn-tiny" onClick={() => handleCrawlPicked(pickedOrders)}>
+                    <Icon name="play" size={11} />
+                    {t("Crawl {count} chapters", { count: pickedOrders.length })}
+                  </button>
+                  <button type="button" className="btn btn-tiny btn-quiet" onClick={() => setConfirmBulk(true)}>
+                    <Icon name="trash" size={12} />
+                    {t("Delete selected")}
+                  </button>
+                  <button type="button" className="btn btn-tiny btn-quiet" onClick={() => setPicked(new Set())}>
+                    {t("Deselect")}
+                  </button>
+                </>
+              )}
+            </span>
+          </div>
+        )}
         <table className="tbl">
           <thead>
             <tr>
+              <th className="w-9">
+                <input
+                  type="checkbox"
+                  className="checkbox"
+                  aria-label={t("Select all chapters on this page")}
+                  checked={allPagePicked}
+                  ref={(el) => {
+                    if (el) el.indeterminate = somePagePicked && !allPagePicked;
+                  }}
+                  disabled={job.running || visibleChapters.length === 0}
+                  onChange={() => {
+                    setPicked((current) => {
+                      const next = new Set(current);
+                      for (const c of visibleChapters) {
+                        if (allPagePicked) next.delete(c.order);
+                        else next.add(c.order);
+                      }
+                      return next;
+                    });
+                    setConfirmBulk(false);
+                  }}
+                />
+              </th>
               <th className="num w-11">#</th>
               <th>{t("Chapter")}</th>
               <th className="w-32">{t("Status")}</th>
@@ -614,6 +746,8 @@ export default function StoryDetail({
                     }}
                     onDelete={() => handleDeleteChapter(sc.order)}
                     deleteDisabled={job.running}
+                    picked={picked.has(sc.order)}
+                    onTogglePicked={() => togglePicked(sc.order)}
                   />
                 );
               }
@@ -676,6 +810,8 @@ export default function StoryDetail({
                   }}
                   onDelete={() => handleDeleteChapter(c.order)}
                   deleteDisabled={job.running}
+                  picked={picked.has(c.order)}
+                  onTogglePicked={() => togglePicked(c.order)}
                 />
               );
             })}

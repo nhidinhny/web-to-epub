@@ -27,6 +27,9 @@ interface ChapterCardProps {
   // Missing when the chapter cannot be deleted from this context.
   onDelete?: () => Promise<void>;
   deleteDisabled?: boolean;
+  // Missing when chapters cannot be picked for a bulk action here.
+  picked?: boolean;
+  onTogglePicked?: () => void;
   // Set when the chapter has narration matching its current text: a download link.
   audioUrl?: string;
   // Play / pause this chapter in the story's player (with audioUrl).
@@ -81,6 +84,8 @@ export default function ChapterCard({
   onSaveUrl,
   onDelete,
   deleteDisabled,
+  picked,
+  onTogglePicked,
   audioUrl,
   onPlayAudio,
   audioPlaying,
@@ -298,6 +303,18 @@ export default function ChapterCard({
   return (
     <>
       <tr className={open ? "row-open" : undefined}>
+        {onTogglePicked && (
+          <td>
+            <input
+              type="checkbox"
+              className="checkbox"
+              aria-label={t("Select chapter {order}", { order })}
+              checked={!!picked}
+              disabled={deleteDisabled}
+              onChange={onTogglePicked}
+            />
+          </td>
+        )}
         <td className="num w-11">
           <b>{order}</b>
         </td>
@@ -443,7 +460,7 @@ export default function ChapterCard({
 
       {open && (
         <tr className="chapter-open" id={panelId}>
-          <td colSpan={4}>
+          <td colSpan={onTogglePicked ? 5 : 4}>
             {!imported &&
               (urlEditing ? (
                 <form
