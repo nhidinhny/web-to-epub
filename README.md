@@ -100,6 +100,7 @@ the error. The full, dated list (including notes per site) is in
 | `asianfanfics.com` | Fanfiction (EN) | Cloudflare-protected; rated M / subscribers-only needs an imported browser session (see below) |
 | `fanfiction.net` | Fanfiction (EN) | |
 | `scribd.com` | Documents | Documents the account cannot fully view are refused |
+| `mangadex.org` | Comics | One story per translation (Vietnamese, else English; add `?lang=en` etc. for another); chapters hosted on MangaPlus are skipped |
 
 **Book import (not crawled chapter by chapter):** EPUB and PDF files, `dtv-ebook.com.vn`,
 `heyzine.com`, `archive.org`.
