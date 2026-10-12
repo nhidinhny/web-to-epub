@@ -106,12 +106,11 @@ export default function StoryDetail({
     });
   }
 
-  // The header box ticks every chapter card on the page (pending rows have nothing to do).
+  // The header box ticks every chapter on the page; a pending row can only be deleted.
   function toggleSelectVisible(selected: boolean) {
     setSelectedOrders((current) => {
       const next = new Set(current);
       for (const chapter of visibleChapters) {
-        if (chapter.status === "pending") continue;
         if (selected) next.add(chapter.order);
         else next.delete(chapter.order);
       }
@@ -122,8 +121,8 @@ export default function StoryDetail({
   async function handleBatchSpellChecked() {
     setError(null);
     try {
-      for (const order of selectedList) await saveChapterSpellChecked(story.id, order, true);
-      await refreshStory(selectedList);
+      for (const order of selectedCrawled) await saveChapterSpellChecked(story.id, order, true);
+      await refreshStory(selectedCrawled);
       setSelectedOrders(new Set());
     } catch (err) {
       setError((err as Error).message);
@@ -135,21 +134,31 @@ export default function StoryDetail({
       return;
     }
     setError(null);
+    // One refusal (a chapter already gone) does not stop the rest: the refused ones stay
+    // selected and the first reason is shown.
+    const failed = new Map<number, string>();
+    for (const order of selectedList) {
+      try {
+        await deleteChapter(story.id, order);
+      } catch (err) {
+        failed.set(order, (err as Error).message);
+      }
+    }
+    setSelectedOrders(new Set(failed.keys()));
     try {
-      for (const order of selectedList) await deleteChapter(story.id, order);
-      setSelectedOrders(new Set());
       await refreshStory();
       await onStoryChanged();
     } catch (err) {
       setError((err as Error).message);
     }
+    if (failed.size > 0) setError(failed.values().next().value as string);
   }
 
   function handleBatchRecrawl() {
-    if (!window.confirm(t("Re-crawl {count} chapters? Their saved content will be overwritten.", { count: selectedList.length }))) {
+    if (!window.confirm(t("Re-crawl {count} chapters? Their saved content will be overwritten.", { count: selectedCrawled.length }))) {
       return;
     }
-    handleCrawl(selectedList);
+    handleCrawl(selectedCrawled);
     setSelectedOrders(new Set());
   }
 
@@ -219,6 +228,8 @@ export default function StoryDetail({
   }, [story.id]);
 
   const stateByOrder = new Map(chapters.map((c) => [c.order, c]));
+  // A pending row has nothing to rewrite, narrate, re-crawl or mark yet: only Delete takes it.
+  const selectedCrawled = selectedList.filter((order) => stateByOrder.has(order));
 
   // Exactly what the book will contain, with the titles currently in the editor —
   // the reader is a preview of the export, not of what is on the server.
@@ -242,7 +253,7 @@ export default function StoryDetail({
     (currentChapterPage - 1) * CHAPTERS_PER_PAGE,
     currentChapterPage * CHAPTERS_PER_PAGE
   );
-  const selectableVisible = visibleChapters.filter((chapter) => chapter.status !== "pending").map((chapter) => chapter.order);
+  const selectableVisible = visibleChapters.map((chapter) => chapter.order);
 
   // Open story listens on realtime channel: crawl started by this or another
   // session both update the chapter table directly.
@@ -683,44 +694,46 @@ export default function StoryDetail({
       {selectedList.length > 0 && (
         <div className="banner flex flex-wrap items-center gap-2" role="status">
           <b>{t("{count} chapters selected", { count: selectedList.length })}</b>
-          {narratable && rewrite.state?.ready && (
+          {narratable && rewrite.state?.ready && selectedCrawled.length > 0 && (
             <button
               type="button"
               className="btn btn-tiny"
               disabled={!!rewrite.state.running}
               onClick={() => {
-                void rewrite.start(selectedList);
+                void rewrite.start(selectedCrawled);
                 setSelectedOrders(new Set());
               }}
             >
               <Icon name="sparkles" size={12} />
-              {t("Rewrite {count} chapters", { count: selectedList.length })}
+              {t("Rewrite {count} chapters", { count: selectedCrawled.length })}
             </button>
           )}
-          {narratable && narration.state && (
+          {narratable && narration.state && selectedCrawled.length > 0 && (
             <button
               type="button"
               className="btn btn-tiny"
               disabled={!!narration.state.running}
               onClick={() => {
-                void narration.start(selectedList);
+                void narration.start(selectedCrawled);
                 setSelectedOrders(new Set());
               }}
             >
               <Icon name="narration" size={12} />
-              {t("Create audio for {count} chapters", { count: selectedList.length })}
+              {t("Create audio for {count} chapters", { count: selectedCrawled.length })}
             </button>
           )}
-          {!imported && (
+          {!imported && selectedCrawled.length > 0 && (
             <button type="button" className="btn btn-tiny" disabled={job.running} onClick={handleBatchRecrawl}>
               <Icon name="retry" size={12} />
-              {t("Re-crawl {count} chapters", { count: selectedList.length })}
+              {t("Re-crawl {count} chapters", { count: selectedCrawled.length })}
             </button>
           )}
-          <button type="button" className="btn btn-tiny" disabled={job.running} onClick={() => void handleBatchSpellChecked()}>
-            <Icon name="spellcheck" size={12} />
-            {t("Mark {count} chapters as spelling-fixed", { count: selectedList.length })}
-          </button>
+          {selectedCrawled.length > 0 && (
+            <button type="button" className="btn btn-tiny" disabled={job.running} onClick={() => void handleBatchSpellChecked()}>
+              <Icon name="spellcheck" size={12} />
+              {t("Mark {count} chapters as spelling-fixed", { count: selectedCrawled.length })}
+            </button>
+          )}
           <button type="button" className="btn btn-tiny btn-danger" disabled={job.running} onClick={() => void handleBatchDelete()}>
             <Icon name="trash" size={12} />
             {t("Delete {count} chapters", { count: selectedList.length })}
@@ -768,6 +781,8 @@ export default function StoryDetail({
                     }}
                     onDelete={() => handleDeleteChapter(sc.order)}
                     deleteDisabled={job.running}
+                    selected={selectedOrders.has(sc.order)}
+                    onSelectChange={(selected) => toggleSelected(sc.order, selected)}
                   />
                 );
               }
