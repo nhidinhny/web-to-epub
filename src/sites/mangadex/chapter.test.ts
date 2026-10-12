@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchText, fetchWithRetry } from "../../services/toc/http";
+import { fetchText, fetchWithRetry, sleep } from "../../services/toc/http";
 import type { EpubMediaStore } from "../../services/epubMedia";
-import { fetchMangadexChapter, pageSources } from "./chapter";
+import { fetchMangadexChapter, isMangadexPageHost, pageSources } from "./chapter";
 
 vi.mock("../../services/toc/http", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../services/toc/http")>()),
@@ -14,6 +14,7 @@ vi.mock("../../services/toc/http", async (importOriginal) => ({
 
 const mockedApi = vi.mocked(fetchText);
 const mockedFetch = vi.mocked(fetchWithRetry);
+const mockedSleep = vi.mocked(sleep);
 
 const readFixture = (name: string) =>
   JSON.parse(readFileSync(fileURLToPath(new URL(`./__fixtures__/${name}`, import.meta.url)), "utf8"));
@@ -45,6 +46,23 @@ function fakeMedia() {
 beforeEach(() => {
   mockedApi.mockReset();
   mockedFetch.mockReset();
+  mockedSleep.mockClear();
+});
+
+describe("isMangadexPageHost", () => {
+  it("nhận node MangaDex@Home và máy chủ upload của MangaDex", () => {
+    expect(isMangadexPageHost("https://cmdxd98sb0x3yprd.mangadex.network")).toBe(true);
+    expect(isMangadexPageHost("https://cmdxd98sb0x3yprd.mangadex.network:44300")).toBe(true);
+    expect(isMangadexPageHost("https://uploads.mangadex.org")).toBe(true);
+  });
+
+  it("từ chối host khác, http và địa chỉ hỏng", () => {
+    expect(isMangadexPageHost("https://example.com")).toBe(false);
+    expect(isMangadexPageHost("https://node.mangadex.network.example.com")).toBe(false);
+    expect(isMangadexPageHost("https://evilmangadex.network")).toBe(false);
+    expect(isMangadexPageHost("http://node.mangadex.network")).toBe(false);
+    expect(isMangadexPageHost("not a url")).toBe(false);
+  });
 });
 
 describe("pageSources", () => {
@@ -124,6 +142,38 @@ describe("fetchMangadexChapter", () => {
     );
     const { media } = fakeMedia();
     await expect(fetchMangadexChapter(CHAPTER_URL, { storyId: "0123456789abcdef", media })).rejects.toThrow(/another site/);
+  });
+
+  it("không tải ảnh từ máy chủ lạ mà API đưa ra", async () => {
+    mockedApi.mockImplementation(async (url) =>
+      String(url).includes("/at-home/server/") ? json({ ...atHome, baseUrl: "https://example.com" }) : json(chapterInfo)
+    );
+    const { media } = fakeMedia();
+    await expect(fetchMangadexChapter(CHAPTER_URL, { storyId: "0123456789abcdef", media })).rejects.toThrow(/unexpected server/);
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
+  it("xếp hàng các lần gọi at-home của những chương crawl song song", async () => {
+    route({
+      "https://node.mangadex.network/data/h/1.jpg": jpeg("one"),
+      "https://node.mangadex.network/data/h/2.png": png("two"),
+    });
+    const { media } = fakeMedia();
+    const context = { storyId: "0123456789abcdef", media };
+    const now = vi.spyOn(Date, "now");
+    try {
+      // A call at T, then two chapters start together 500 ms later: both have to wait.
+      const t = Date.now() + 1_000_000;
+      now.mockReturnValue(t);
+      await fetchMangadexChapter(CHAPTER_URL, context);
+      mockedSleep.mockClear();
+      now.mockReturnValue(t + 500);
+      await Promise.all([fetchMangadexChapter(CHAPTER_URL, context), fetchMangadexChapter(CHAPTER_URL, context)]);
+      // The second takes the slot after the first instead of firing with it.
+      expect(mockedSleep.mock.calls.map(([ms]) => ms)).toEqual([1000, 2500]);
+    } finally {
+      now.mockRestore();
+    }
   });
 
   it("cần context để lưu ảnh", async () => {

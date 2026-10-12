@@ -178,6 +178,8 @@ const vi: Record<string, string> = {
     "Không lưu được ảnh trang của chương MangaDex này — hãy crawl lại ({url})",
   "This chapter is hosted on another site, not on MangaDex ({url})": "Chương này được đăng ở trang khác, không phải trên MangaDex ({url})",
   "MangaDex returned no page for this chapter ({url})": "MangaDex không trả về trang ảnh nào cho chương này ({url})",
+  "MangaDex named an unexpected server for this chapter's pages — retry the chapter ({url})":
+    "MangaDex đưa ra máy chủ ảnh lạ cho chương này — hãy thử lại chương ({url})",
   "Could not download page {page} of this MangaDex chapter — retry the chapter ({url})":
     "Không tải được trang {page} của chương MangaDex này — hãy thử lại chương ({url})",
 

@@ -19,10 +19,24 @@ interface AtHome {
 
 let lastAtHomeCall = 0;
 
+// Each call takes the next free slot before it waits: crawls running side by side then queue
+// behind one another instead of reading the same last call and firing together.
 async function waitForAtHome(): Promise<void> {
-  const wait = lastAtHomeCall + AT_HOME_INTERVAL_MS - Date.now();
+  const slot = Math.max(Date.now(), lastAtHomeCall + AT_HOME_INTERVAL_MS);
+  lastAtHomeCall = slot;
+  const wait = slot - Date.now();
   if (wait > 0) await sleep(wait);
-  lastAtHomeCall = Date.now();
+}
+
+// Pages come from MangaDex's own upload server or a MangaDex@Home node. The API names the
+// node, so any other host it might name is refused instead of fetched.
+export function isMangadexPageHost(baseUrl: string): boolean {
+  try {
+    const { protocol, hostname } = new URL(baseUrl);
+    return protocol === "https:" && (hostname === "uploads.mangadex.org" || hostname.endsWith(".mangadex.network"));
+  } catch {
+    return false;
+  }
 }
 
 export interface PageSource {
@@ -75,7 +89,11 @@ export async function fetchMangadexChapter(url: string, context?: ChapterFetchCo
     throw new Error(t("This chapter is hosted on another site, not on MangaDex ({url})", { url }));
   }
   await waitForAtHome();
-  const pages = pageSources(await mangadexApi<AtHome>(`/at-home/server/${id}`, url));
+  const atHome = await mangadexApi<AtHome>(`/at-home/server/${id}`, url);
+  if (atHome.baseUrl && !isMangadexPageHost(atHome.baseUrl)) {
+    throw new Error(t("MangaDex named an unexpected server for this chapter's pages — retry the chapter ({url})", { url }));
+  }
+  const pages = pageSources(atHome);
   if (pages.length === 0) {
     throw new Error(t("MangaDex returned no page for this chapter ({url})", { url }));
   }
