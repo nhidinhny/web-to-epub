@@ -263,6 +263,7 @@ export const vi: Record<string, string> = {
   "{title} — EPUB preview": "{title} — xem thử EPUB",
   "Loading chapter…": "Đang tải chương…",
   "{percent}% · ~{minutes} min left": "{percent}% · còn ~{minutes} phút",
+  "{count} words": "{count} từ",
   "Text size": "Cỡ chữ",
   "Smaller text": "Chữ nhỏ hơn",
   "Larger text": "Chữ to hơn",

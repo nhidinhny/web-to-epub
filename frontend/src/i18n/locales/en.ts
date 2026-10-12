@@ -262,6 +262,7 @@ export const en: Record<string, string> = {
   "{title} — EPUB preview": "{title} — EPUB preview",
   "Loading chapter…": "Loading chapter…",
   "{percent}% · ~{minutes} min left": "{percent}% · ~{minutes} min left",
+  "{count} words": "{count} words",
   "Text size": "Text size",
   "Smaller text": "Smaller text",
   "Larger text": "Larger text",
