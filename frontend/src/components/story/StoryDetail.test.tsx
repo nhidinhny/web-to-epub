@@ -498,6 +498,32 @@ describe("StoryDetail batch actions", () => {
     expect(start).toHaveBeenCalledWith([1]);
   });
 
+  it("forgets a deleted pending chapter's edited title, as a single delete does", async () => {
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    api.saveChapterTitle.mockResolvedValue(undefined);
+    api.deleteChapter.mockResolvedValue(undefined);
+    api.fetchStory.mockResolvedValue(makeStory({ chapters: [ch(1), ch(3, { status: "error", error: "boom" })] }));
+    const { props, rerender } = setup();
+    await userEvent.click(screen.getByRole("button", { name: "Edit title for chapter 2" }));
+    const input = screen.getByLabelText("Title for chapter 2");
+    await userEvent.clear(input);
+    await userEvent.type(input, "Fixed");
+    await userEvent.click(screen.getByRole("button", { name: "Save title" }));
+    expect(await screen.findByText("Fixed")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select chapter 2" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete 1 chapters" }));
+    await waitFor(() => expect(api.deleteChapter).toHaveBeenCalledWith("s1", 2));
+    // Reloading the chapter list brings the chapter back at the same order, with the site's title.
+    rerender(
+      <LangProvider>
+        <StoryDetail {...props} story={makeStory({ updatedAt: "2026-01-03" })} />
+      </LangProvider>,
+    );
+    expect(await screen.findByText("Chapter title 2")).toBeInTheDocument();
+    expect(screen.queryByText("Fixed")).not.toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
   it("keeps deleting after one chapter is refused, and leaves that one selected", async () => {
     vi.stubGlobal("confirm", vi.fn(() => true));
     api.deleteChapter.mockRejectedValueOnce(new Error("Chapter not found")).mockResolvedValue(undefined);

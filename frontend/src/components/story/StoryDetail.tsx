@@ -140,6 +140,7 @@ export default function StoryDetail({
     for (const order of selectedList) {
       try {
         await deleteChapter(story.id, order);
+        forgetChapter(order);
       } catch (err) {
         failed.set(order, (err as Error).message);
       }
@@ -386,17 +387,23 @@ export default function StoryDetail({
     setError(null);
     try {
       await deleteChapter(story.id, order);
-      bodies.current.delete(`stored-${order}`);
-      setChapters((cs) => cs.filter((c) => c.order !== order));
-      setPendingTitles((titles) => {
-        if (!(order in titles)) return titles;
-        const { [order]: _removed, ...rest } = titles;
-        return rest;
-      });
+      forgetChapter(order);
       await onStoryChanged();
     } catch (err) {
       setError((err as Error).message);
     }
+  }
+
+  // Drop what the page still holds for a deleted chapter: a reloaded chapter list can bring
+  // the same order back, and it must not show the old editor body or a title typed earlier.
+  function forgetChapter(order: number) {
+    bodies.current.delete(`stored-${order}`);
+    setChapters((cs) => cs.filter((c) => c.order !== order));
+    setPendingTitles((titles) => {
+      if (!(order in titles)) return titles;
+      const { [order]: _removed, ...rest } = titles;
+      return rest;
+    });
   }
 
   async function handleToggleSpellChecked(order: number, spellChecked: boolean) {
