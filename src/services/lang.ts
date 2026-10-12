@@ -167,6 +167,19 @@ const vi: Record<string, string> = {
     "Trang {page} của tài liệu Scribd này bị khoá với tài khoản của bạn — hãy nhập phiên của tài khoản xem được toàn bộ tài liệu rồi thử lại: {url}",
   "Could not store this Scribd document's page images — retry the crawl ({url})":
     "Không lưu được ảnh các trang của tài liệu Scribd này — hãy chạy lại crawl ({url})",
+  "MangaDex API did not return JSON ({url})": "API MangaDex trả về không phải JSON ({url})",
+  "This is not a MangaDex title page: {url} — paste a URL like https://mangadex.org/title/<id>":
+    "URL này không phải trang truyện MangaDex: {url} — cần dán URL dạng https://mangadex.org/title/<id>",
+  "This manga has no translated chapters on MangaDex ({url})": "Truyện này chưa có chương dịch nào trên MangaDex ({url})",
+  "No chapter of this manga can be read on MangaDex in this language ({lang}) — chapters hosted on other sites are skipped ({url})":
+    "Không có chương nào đọc được trên MangaDex ở ngôn ngữ này ({lang}) — chương đăng ở trang khác bị bỏ qua ({url})",
+  "This is not a MangaDex chapter page: {url}": "URL này không phải trang chương MangaDex: {url}",
+  "Could not store this MangaDex chapter's pages — retry the crawl ({url})":
+    "Không lưu được ảnh trang của chương MangaDex này — hãy crawl lại ({url})",
+  "This chapter is hosted on another site, not on MangaDex ({url})": "Chương này được đăng ở trang khác, không phải trên MangaDex ({url})",
+  "MangaDex returned no page for this chapter ({url})": "MangaDex không trả về trang ảnh nào cho chương này ({url})",
+  "Could not download page {page} of this MangaDex chapter — retry the chapter ({url})":
+    "Không tải được trang {page} của chương MangaDex này — hãy thử lại chương ({url})",
 
   // Saved site sessions
   "Saved login session is unreadable — delete {file} and log in again":
