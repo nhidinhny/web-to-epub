@@ -177,7 +177,8 @@ export default function StoryDetail({
   const [youtubeOpen, setYoutubeOpen] = useState(false);
   // Chapters ticked in the table for the batch actions above it.
   const [selectedOrders, setSelectedOrders] = useState<Set<number>>(new Set());
-  const selectedList = [...selectedOrders].sort((a, b) => a - b);
+  // A ticked chapter that is gone from the story (deleted here or elsewhere) no longer counts.
+  const selectedList = story.chapters.filter((c) => selectedOrders.has(c.order)).map((c) => c.order);
   // A book imported from a file has no TOC to crawl, check or watch; those controls
   // and the source link would all point at an epub: URL that no site can answer.
   const imported = story.site === IMPORTED_SITE;

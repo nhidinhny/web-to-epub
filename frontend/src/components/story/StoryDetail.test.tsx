@@ -540,6 +540,21 @@ describe("StoryDetail batch actions", () => {
     vi.unstubAllGlobals();
   });
 
+  it("stops counting a selected chapter once it is gone from the story", async () => {
+    const { props, rerender } = setup();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select chapter 1" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select chapter 2" }));
+    expect(screen.getByText("2 chapters selected")).toBeInTheDocument();
+    // Chapter 1 was deleted elsewhere; the parent refetched the story without it.
+    rerender(
+      <LangProvider>
+        <StoryDetail {...props} story={makeStory({ chapters: [ch(2, { status: "pending", blocks: undefined }), ch(3)] })} />
+      </LangProvider>,
+    );
+    expect(screen.getByText("1 chapters selected")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete 1 chapters" })).toBeInTheDocument();
+  });
+
   it("deletes the selected chapters after one confirmation", async () => {
     vi.stubGlobal("confirm", vi.fn(() => true));
     api.deleteChapter.mockResolvedValue(undefined);
