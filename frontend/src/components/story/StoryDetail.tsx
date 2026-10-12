@@ -698,59 +698,6 @@ export default function StoryDetail({
         </div>
       </div>
 
-      {selectedList.length > 0 && (
-        <div className="banner flex flex-wrap items-center gap-2" role="status">
-          <b>{t("{count} chapters selected", { count: selectedList.length })}</b>
-          {narratable && rewrite.state?.ready && selectedCrawled.length > 0 && (
-            <button
-              type="button"
-              className="btn btn-tiny"
-              disabled={!!rewrite.state.running}
-              onClick={() => {
-                void rewrite.start(selectedCrawled);
-                setSelectedOrders(new Set());
-              }}
-            >
-              <Icon name="sparkles" size={12} />
-              {t("Rewrite {count} chapters", { count: selectedCrawled.length })}
-            </button>
-          )}
-          {narratable && narration.state && selectedCrawled.length > 0 && (
-            <button
-              type="button"
-              className="btn btn-tiny"
-              disabled={!!narration.state.running}
-              onClick={() => {
-                void narration.start(selectedCrawled);
-                setSelectedOrders(new Set());
-              }}
-            >
-              <Icon name="narration" size={12} />
-              {t("Create audio for {count} chapters", { count: selectedCrawled.length })}
-            </button>
-          )}
-          {!imported && selectedCrawled.length > 0 && (
-            <button type="button" className="btn btn-tiny" disabled={job.running} onClick={handleBatchRecrawl}>
-              <Icon name="retry" size={12} />
-              {t("Re-crawl {count} chapters", { count: selectedCrawled.length })}
-            </button>
-          )}
-          {selectedCrawled.length > 0 && (
-            <button type="button" className="btn btn-tiny" disabled={job.running} onClick={() => void handleBatchSpellChecked()}>
-              <Icon name="spellcheck" size={12} />
-              {t("Mark {count} chapters as spelling-fixed", { count: selectedCrawled.length })}
-            </button>
-          )}
-          <button type="button" className="btn btn-tiny btn-danger" disabled={job.running} onClick={() => void handleBatchDelete()}>
-            <Icon name="trash" size={12} />
-            {t("Delete {count} chapters", { count: selectedList.length })}
-          </button>
-          <button type="button" className="btn btn-quiet btn-tiny" onClick={() => setSelectedOrders(new Set())}>
-            {t("Clear selection")}
-          </button>
-        </div>
-      )}
-
       <div className="pane-body flex-none overflow-visible">
         <table className="tbl">
           <thead>
@@ -769,6 +716,64 @@ export default function StoryDetail({
               <th className="w-32">{t("Status")}</th>
               <th className="w-44" />
             </tr>
+            {/* The batch bar is a second header row, so it stays under the column titles
+                however far down a long chapter list is scrolled. */}
+            {selectedList.length > 0 && (
+              <tr>
+                <th colSpan={5} className="top-[var(--thead-h)] h-auto p-0 font-normal normal-case tracking-normal whitespace-normal">
+                  <div className="banner flex flex-wrap items-center gap-2 rounded-none border-x-0 border-t-0" role="status">
+                    <b>{t("{count} chapters selected", { count: selectedList.length })}</b>
+                    {narratable && rewrite.state?.ready && selectedCrawled.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-tiny"
+                        disabled={!!rewrite.state.running}
+                        onClick={() => {
+                          void rewrite.start(selectedCrawled);
+                          setSelectedOrders(new Set());
+                        }}
+                      >
+                        <Icon name="sparkles" size={12} />
+                        {t("Rewrite {count} chapters", { count: selectedCrawled.length })}
+                      </button>
+                    )}
+                    {narratable && narration.state && selectedCrawled.length > 0 && (
+                      <button
+                        type="button"
+                        className="btn btn-tiny"
+                        disabled={!!narration.state.running}
+                        onClick={() => {
+                          void narration.start(selectedCrawled);
+                          setSelectedOrders(new Set());
+                        }}
+                      >
+                        <Icon name="narration" size={12} />
+                        {t("Create audio for {count} chapters", { count: selectedCrawled.length })}
+                      </button>
+                    )}
+                    {!imported && selectedCrawled.length > 0 && (
+                      <button type="button" className="btn btn-tiny" disabled={job.running} onClick={handleBatchRecrawl}>
+                        <Icon name="retry" size={12} />
+                        {t("Re-crawl {count} chapters", { count: selectedCrawled.length })}
+                      </button>
+                    )}
+                    {selectedCrawled.length > 0 && (
+                      <button type="button" className="btn btn-tiny" disabled={job.running} onClick={() => void handleBatchSpellChecked()}>
+                        <Icon name="spellcheck" size={12} />
+                        {t("Mark {count} chapters as spelling-fixed", { count: selectedCrawled.length })}
+                      </button>
+                    )}
+                    <button type="button" className="btn btn-tiny btn-danger" disabled={job.running} onClick={() => void handleBatchDelete()}>
+                      <Icon name="trash" size={12} />
+                      {t("Delete {count} chapters", { count: selectedList.length })}
+                    </button>
+                    <button type="button" className="btn btn-quiet btn-tiny" onClick={() => setSelectedOrders(new Set())}>
+                      {t("Clear selection")}
+                    </button>
+                  </div>
+                </th>
+              </tr>
+            )}
           </thead>
           <tbody>
             {visibleChapters.map((sc) => {
